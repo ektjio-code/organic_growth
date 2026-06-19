@@ -284,13 +284,18 @@ function buildTree() {
   // roots: downward, randomized, finer/tighter splits, tapering (pointed) tips.
   // Pushed into the same segments/tips arrays (flagged isRoot) so they grow,
   // cache and draw with the branches — just lit differently (blink, not steady).
-  function growRoots(x, y, angle, len, width, depth, order) {
-    if (depth > 9 || len < 4) { tips.push({ x, y, order, depth, isRoot: true }); return; }
+  // central=true → a taproot pulled straight down (fills the mid-lower area).
+  // depth capped at 6 so roots finish by ~tap 3 and shed the tiny dense final tips.
+  function growRoots(x, y, angle, len, width, depth, order, central) {
+    if (depth > 6 || len < 8) { tips.push({ x, y, order, depth, isRoot: true }); return; }
     const drift = (rand() - 0.5) * 0.35;
     let a = angle + drift;
-    // mild outward spread so roots fan wide (still descend), not a tidy crown
-    const horiz = a < Math.PI / 2 ? 0 : Math.PI;
-    a = a * 0.8 + horiz * 0.2;
+    if (central) {
+      a = a * 0.85 + (Math.PI / 2) * 0.15;           // taproot: trend straight down
+    } else {
+      const horiz = a < Math.PI / 2 ? 0 : Math.PI;   // others: fan outward (wide)
+      a = a * 0.8 + horiz * 0.2;
+    }
     a = Math.max(0.12, Math.min(Math.PI - 0.12, a)); // stay just below the seed line
     const x1 = x + Math.cos(a) * len;
     const y1 = y + Math.sin(a) * len;
@@ -304,7 +309,7 @@ function buildTree() {
       const dir = (i - (children-1)/2) * spread + (rand()-0.5) * 0.4;
       const childLen = len * (0.80 + rand() * 0.10); // way longer (slow taper in length)
       const childW = width * 0.62;                   // tapers toward pointed tips
-      growRoots(x1, y1, a + dir, childLen, childW, depth + 1, order + 0.04 + rand()*0.07);
+      growRoots(x1, y1, a + dir, childLen, childW, depth + 1, order + 0.04 + rand()*0.07, central);
     }
   }
 
@@ -319,7 +324,13 @@ function buildTree() {
     for (let i = 0; i < primaries; i++) {
       const ang = 0.3 + (i / (primaries - 1)) * (Math.PI - 0.6) + (rand()-0.5) * 0.2;
       const len = H * 0.16 * (0.85 + rand() * 0.45);
-      growRoots(baseX, baseY, ang, len, Math.max(W,H) * 0.011, 0, 0);
+      growRoots(baseX, baseY, ang, len, Math.max(W,H) * 0.011, 0, 0, false);
+    }
+    // central taproots: fill the empty mid-lower area straight below the seed
+    for (let i = 0; i < 2; i++) {
+      const ang = Math.PI/2 + (rand()-0.5) * 0.25;
+      const len = H * 0.18 * (0.9 + rand() * 0.3);
+      growRoots(baseX, baseY, ang, len, Math.max(W,H) * 0.011, 0, 0, true);
     }
     fitTreeCentered(baseX, baseY);
   } else {
