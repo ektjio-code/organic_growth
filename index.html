@@ -193,20 +193,28 @@ function makeVignette() {
 // expensive shadowBlur) every frame is wasted work. Render them once into this
 // layer and blit it; only rebuild when the fully-grown boundary actually moves.
 let completedCv, completedCtx, cachedGen = -1;
+let displayCv, displayCtx, tmpCv, tmpCtx;   // bloom: crisp tree composited with its glow
 function makeCompletedLayer() {
   completedCv = document.createElement('canvas');
   completedCv.width  = Math.ceil(W * DPR);
   completedCv.height = Math.ceil(H * DPR);
   completedCtx = completedCv.getContext('2d');
+  displayCv = document.createElement('canvas');   // the layer actually blitted (glow + lines)
+  displayCv.width = completedCv.width; displayCv.height = completedCv.height;
+  displayCtx = displayCv.getContext('2d');
   cachedGen = -1;           // force a rebuild on next draw
 }
+// Crisp strokes (no per-stroke shadowBlur), baked INCREMENTALLY: growing forward
+// only appends the newly-completed generations; going backward (desktop scroll up)
+// or the first build redraws from scratch. This is what kills the growth stutter.
 function buildCompletedLayer(maxGenInclusive) {
   const c = completedCtx;
   c.setTransform(DPR, 0, 0, DPR, 0, 0);
-  c.clearRect(0, 0, W, H);
   c.lineCap = 'round';
+  let from = cachedGen + 1;
+  if (maxGenInclusive < cachedGen || cachedGen < 0) { c.clearRect(0, 0, W, H); from = 0; }
   for (const s of segments) {
-    if (s.gen > maxGenInclusive) continue;
+    if (s.gen < from || s.gen > maxGenInclusive) continue;
     const depthT = s.depth / 9;
     const r  = Math.round(60  + depthT * 70);
     const gg = Math.round(180 + depthT * 75);
@@ -214,12 +222,28 @@ function buildCompletedLayer(maxGenInclusive) {
     const alpha = 0.55 + depthT * 0.45;
     c.strokeStyle = `rgba(${r},${gg},${b},${alpha})`;
     c.lineWidth = Math.max(0.6, s.width);
-    c.shadowColor = `rgba(127,255,196,${0.35*alpha})`;
-    c.shadowBlur = 6 + depthT * 8;
     c.beginPath(); c.moveTo(s.x0, s.y0); c.lineTo(s.x1, s.y1); c.stroke();
   }
-  c.shadowBlur = 0;
   cachedGen = maxGenInclusive;
+  buildDisplay();
+}
+// Glow = ONE Gaussian over a ½-res copy of the crisp tree (~4× cheaper, looks the
+// same), composited UNDER the crisp lines into the layer we blit. Rebuilt per bake.
+function buildDisplay() {
+  if (!tmpCv) { tmpCv = document.createElement('canvas'); tmpCtx = tmpCv.getContext('2d'); }
+  const sw = Math.max(1, Math.round(completedCv.width / 2));
+  const sh = Math.max(1, Math.round(completedCv.height / 2));
+  tmpCv.width = sw; tmpCv.height = sh;
+  tmpCtx.setTransform(1, 0, 0, 1, 0, 0);
+  tmpCtx.clearRect(0, 0, sw, sh);
+  tmpCtx.filter = `blur(${Math.round(3.5 * DPR)}px)`;
+  tmpCtx.drawImage(completedCv, 0, 0, sw, sh);      // downscale + blur in one pass
+  tmpCtx.filter = 'none';
+  const d = displayCtx;
+  d.setTransform(1, 0, 0, 1, 0, 0);
+  d.clearRect(0, 0, displayCv.width, displayCv.height);
+  d.drawImage(tmpCv, 0, 0, displayCv.width, displayCv.height);  // bloom glow underneath
+  d.drawImage(completedCv, 0, 0);                               // crisp lines on top
 }
 
 // ---- Seeded RNG so the tree is identical every render (organic but stable) ----
@@ -487,7 +511,7 @@ function windX(y, t) {
   return amp * Math.sin(t * 0.0012);          // one sine, whole tree in unison
 }
 
-// Blit the cached tree as horizontal strips, each offset sideways by its sway.
+// Blit the composited tree (glow + lines) as horizontal strips, each offset by its sway.
 function drawShearedCache(now) {
   const STRIPS = TOUCH ? 24 : 48;
   const band = H / STRIPS;
@@ -496,8 +520,8 @@ function drawShearedCache(now) {
     const yTop = i * band;
     const dx = windX(yTop + band / 2, now);
     ctx.drawImage(
-      completedCv,
-      0, yTop * DPR, completedCv.width, (band + over) * DPR,  // source (device px)
+      displayCv,
+      0, yTop * DPR, displayCv.width, (band + over) * DPR,    // source (device px)
       dx, yTop, W, band + over                                // dest, shifted by dx
     );
   }
@@ -545,15 +569,15 @@ function draw(p) {
   const now = performance.now();
   const ph = phaseFromScroll(p);
 
-  // Completed generations come from the cache; rebuild only when the fully-grown
-  // boundary moves (≈twice per step). WIND blits it sheared; otherwise straight.
+  // Completed generations come from the composited cache (glow + crisp lines);
+  // rebuilt only when the fully-grown boundary moves. WIND blits it sheared.
   const fullyGrown = ph.growT >= 1 ? ph.gen : ph.gen - 1;
   if (cachedGen !== fullyGrown) buildCompletedLayer(fullyGrown);
   if (WIND) drawShearedCache(now);
-  else      ctx.drawImage(completedCv, 0, 0, W, H);
+  else      ctx.drawImage(displayCv, 0, 0, W, H);
 
-  // The currently-growing generation animates live. Once it's fully grown it's
-  // folded into the cache above, so we skip it here.
+  // The currently-growing generation animates live as crisp lines (no shadowBlur —
+  // that's what stuttered). Its glow appears when it bakes into the cache on settle.
   if (ph.growT < 1) {
     const ease = 1 - Math.pow(1 - ph.growT, 3);   // easeOutCubic
     for (const s of segments) {
@@ -571,11 +595,8 @@ function draw(p) {
 
       ctx.strokeStyle = `rgba(${r},${gg},${b},${alpha})`;
       ctx.lineWidth = Math.max(0.6, s.width);
-      ctx.shadowColor = `rgba(127,255,196,${0.35*alpha})`;
-      ctx.shadowBlur = 6 + depthT * 8;
       ctx.beginPath(); ctx.moveTo(s.x0 + o0, s.y0); ctx.lineTo(x1 + o1, y1); ctx.stroke();
     }
-    ctx.shadowBlur = 0;
   }
 
   // --- Glowing nodes: every fork AND tip FLASHES the moment it's reached (the
