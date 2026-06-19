@@ -283,6 +283,7 @@ function buildTree() {
   grow(baseX, baseY, -Math.PI/2, trunkLen, Math.max(W,H)*0.012, 0, 0);
 
   fitTree(baseX, baseY);   // scale to fit the viewport (esp. tall/narrow phones)
+  if (TOUCH) tallerMobile(baseY);   // mobile: stretch vertically for a taller tree
 
   // normalize order to 0..1
   segments.forEach(s => s.order /= maxOrder);
@@ -321,6 +322,26 @@ function fitTree(baseX, baseY) {
   for (const t of tips) {
     t.x = baseX + (t.x - baseX) * scale; t.y = baseY + (t.y - baseY) * scale;
   }
+}
+
+// ---- Mobile: taller tree ----
+// On phones the tree is width-constrained, leaving empty vertical space. Stretch
+// it vertically (anchored at the seed) to ~1.85× its height, clamped so the
+// canopy stays inside the top margin. Vertical-only, so widths/glow are unchanged.
+function tallerMobile(baseY) {
+  const TALL = 1.85;                          // just under double
+  let minY = baseY;
+  for (const s of segments) minY = Math.min(minY, s.y0, s.y1);
+  for (const t of tips) minY = Math.min(minY, t.y);
+  const maxFactor = (baseY - H * 0.05) / (baseY - minY);  // keep 5% top margin
+  const f = Math.min(TALL, maxFactor);
+  if (f <= 1.0001) return;
+  for (const s of segments) {
+    s.y0 = baseY + (s.y0 - baseY) * f;
+    s.y1 = baseY + (s.y1 - baseY) * f;
+    s.splitY = baseY + (s.splitY - baseY) * f;
+  }
+  for (const t of tips) t.y = baseY + (t.y - baseY) * f;
 }
 
 // ---- Hotspots ----
@@ -396,7 +417,11 @@ function windX(y, t) {
   const h = groundY - y;
   if (h <= 0) return 0;                       // at/below the base: planted
   const hf = h / H;                           // height fraction (0 base → ~0.9 canopy)
-  return hf * hf * W * 0.018 * Math.sin(t * 0.0012);  // one sine, whole tree in unison
+  // Mobile gets a much bigger swing (referenced to the long edge, not the narrow
+  // width) so the sway actually reads on a small screen. Desktop unchanged.
+  const amp = TOUCH ? hf * hf * Math.max(W, H) * 0.05
+                    : hf * hf * W * 0.018;
+  return amp * Math.sin(t * 0.0012);          // one sine, whole tree in unison
 }
 
 // Blit the cached tree as horizontal strips, each offset sideways by its sway.
@@ -519,15 +544,15 @@ function draw(p) {
 // ---- Progress binding ----
 // Desktop: scroll position drives growth. Touch: each tap advances one step.
 let targetP = 0, curP = 0;
-let tapStep = 0;                    // touch: how many growth steps revealed
+let tapStep = 0;                    // touch: how many taps so far
+const TAP_STEPS = 4;               // touch: taps from seed to fully grown
 function scrollProgress() {
   const scrollable = track.offsetHeight - window.innerHeight;
   const y = Math.min(Math.max(window.scrollY, 0), scrollable);
   return scrollable > 0 ? y / scrollable : 0;
 }
 function advanceGrowth() {
-  const steps = maxGen + 1;
-  if (tapStep < steps) tapStep++;
+  if (tapStep < TAP_STEPS) tapStep++;
 }
 
 function updateUI(p) {
@@ -549,7 +574,7 @@ function updateUI(p) {
   } else m.classList.remove('show');
 
   // Desktop hint hides once growth starts; touch hint keeps prompting until done.
-  const done = tapStep >= (maxGen + 1);
+  const done = tapStep >= TAP_STEPS;
   document.getElementById('hint').style.opacity =
     (TOUCH ? done : p > 0.04) ? '0' : '';
 }
@@ -564,7 +589,7 @@ function loop(ts) {
   if (TOUCH && ts - lastFrame < 33) return;
   lastFrame = ts;
 
-  targetP = TOUCH ? Math.min(1, tapStep / (maxGen + 1)) : scrollProgress();
+  targetP = TOUCH ? Math.min(1, tapStep / TAP_STEPS) : scrollProgress();
   curP += (targetP - curP) * 0.12;
   if (Math.abs(targetP - curP) < 0.0002) curP = targetP;
   draw(curP);
