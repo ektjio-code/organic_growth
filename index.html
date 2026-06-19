@@ -285,22 +285,24 @@ function buildTree() {
   // Pushed into the same segments/tips arrays (flagged isRoot) so they grow,
   // cache and draw with the branches — just lit differently (blink, not steady).
   function growRoots(x, y, angle, len, width, depth, order) {
-    if (depth > 9 || len < 5) { tips.push({ x, y, order, depth, isRoot: true }); return; }
-    const drift = (rand() - 0.5) * 0.30;            // roots wiggle more than branches
-    const a = angle + drift;
+    if (depth > 9 || len < 4) { tips.push({ x, y, order, depth, isRoot: true }); return; }
+    const drift = (rand() - 0.5) * 0.45;            // roots wiggle a lot — irregular
+    let a = angle + drift;
+    a = a * 0.8 + (Math.PI / 2) * 0.2;              // gravity: trend downward, never a crown
+    a = Math.max(0.2, Math.min(Math.PI - 0.2, a));  // clamp so roots never curl back up
     const x1 = x + Math.cos(a) * len;
     const y1 = y + Math.sin(a) * len;
     segments.push({ x0:x, y0:y, x1, y1, depth, width, order, gen: depth, splitX:x1, splitY:y1, isRoot:true });
     maxOrder = Math.max(maxOrder, order);
     maxGen = Math.max(maxGen, depth);
     const r = rand();
-    const children = r < 0.25 ? 2 : 3;              // roots branch a touch more
+    const children = r < 0.5 ? 2 : (r < 0.85 ? 3 : 1);
     for (let i = 0; i < children; i++) {
-      const spread = 0.16 + rand() * 0.22;          // tighter forks = "smaller splits"
-      const dir = (i - (children-1)/2) * spread + (rand()-0.5) * 0.20;
-      const childLen = len * (0.68 + rand() * 0.12);
-      const childW = width * 0.58;                  // strong taper toward pointed tips
-      growRoots(x1, y1, a + dir, childLen, childW, depth + 1, order + 0.055 + rand()*0.085);
+      const spread = 0.35 + rand() * 0.55;          // wide, splaying forks (not a tidy crown)
+      const dir = (i - (children-1)/2) * spread + (rand()-0.5) * 0.35;
+      const childLen = len * (0.62 + rand() * 0.14); // shorter, finer ("smaller splits")
+      const childW = width * 0.52;                   // strong taper → pointed tips
+      growRoots(x1, y1, a + dir, childLen, childW, depth + 1, order + 0.05 + rand()*0.08);
     }
   }
 
@@ -308,9 +310,15 @@ function buildTree() {
   grow(baseX, baseY, -Math.PI/2, trunkLen, Math.max(W,H)*0.012, 0, 0);
 
   if (TOUCH) {
-    // grow roots downward (+PI/2) in sync, then fit the whole figure around the
-    // centered seed: canopy toward the top, roots toward the bottom.
-    growRoots(baseX, baseY, Math.PI/2, H * 0.16, Math.max(W,H) * 0.010, 0, 0);
+    // Roots are NOT a mirror: several primary roots splay out from the seed and
+    // trend downward, forking into finer, pointed tendrils. Then fit the whole
+    // figure around the centered seed (canopy up, roots down).
+    const primaries = 4 + Math.floor(rand() * 2);   // 4–5 spreading primary roots
+    for (let i = 0; i < primaries; i++) {
+      const ang = Math.PI/2 + (i - (primaries-1)/2) * 0.5 + (rand()-0.5) * 0.3;
+      const len = H * 0.13 * (0.8 + rand() * 0.5);
+      growRoots(baseX, baseY, ang, len, Math.max(W,H) * 0.009, 0, 0);
+    }
     fitTreeCentered(baseX, baseY);
   } else {
     fitTree(baseX, baseY);   // scale to fit the viewport (esp. tall/narrow phones)
