@@ -506,21 +506,25 @@ function drawShearedCache(now) {
 // A node (a fork or a tip) flashes bright the moment it's reached, then settles
 // into a steady pulsation. Drawn with the pre-rendered glow sprite (cheap,
 // additive). obj holds .litAt so each node remembers its own ignition time.
-const IGNITE_MS = 650;        // duration of the arrival flash
-// persist=true → flash then settle into a steady pulsation (branches/canopy).
-// persist=false → flash once on arrival, then go dark (roots: blink only).
-function nodeGlow(x, y, obj, now, sizeMul, alphaMul, persist) {
+const IGNITE_MS = 650;         // duration of the per-node arrival flash
+const TW_SPEED = 0.003;        // twinkle cycle speed
+const TW_THRESH = 0.84;        // only the top ~16% of each node's cycle lights → sparkle
+// Sparkle model: each node still FLASHES on arrival (kept), but instead of staying
+// lit it only TWINKLES afterwards — lighting briefly at a staggered, per-node time.
+// Most nodes are dark on any given frame and get skipped, so we draw a small
+// fraction of them instead of all of them every frame.
+function nodeGlow(x, y, obj, now, sizeMul, alphaMul) {
   if (obj.litAt === undefined) obj.litAt = now;
   const age = now - obj.litAt;
   const flash = age < IGNITE_MS ? Math.pow(1 - age / IGNITE_MS, 2) : 0;
-  const pulse = persist ? 0.5 + 0.5 * Math.sin(now * 0.0042 + (x + y) * 0.025) : 0;
-  const base = persist ? 0.45 + 0.55 * pulse : 0;   // roots have no steady component
-  const alpha = (base + flash * 0.9) * alphaMul;
-  if (alpha <= 0.004) return;                        // roots vanish once the blink fades
-  const scale = ((0.5 + 0.7 * pulse) + flash * 1.2) * sizeMul;
+  const tw = Math.sin(now * TW_SPEED + x * 0.9 + y * 1.7);   // per-node phase from position
+  const twinkle = tw > TW_THRESH ? (tw - TW_THRESH) / (1 - TW_THRESH) : 0;
+  const bright = flash * 0.95 + twinkle * 0.7;
+  if (bright < 0.02) return;                          // dark this frame → skip (the saving)
+  const scale = (0.45 + 0.7 * Math.max(flash, twinkle)) * sizeMul;
   const r = GLOW_R * scale;
-  const ox = WIND ? windX(y, now) : 0;               // ride the swaying branch (0 for roots)
-  ctx.globalAlpha = Math.min(1, alpha);
+  const ox = WIND ? windX(y, now) : 0;               // ride the swaying branch
+  ctx.globalAlpha = Math.min(1, bright * alphaMul);
   ctx.drawImage(glowSprite, x + ox - r, y - r, r * 2, r * 2);
 }
 
@@ -574,18 +578,17 @@ function draw(p) {
     ctx.shadowBlur = 0;
   }
 
-  // --- Glowing nodes: every fork AND tip flashes the moment it's reached, then
-  // settles into a persistent pulsation. The last nodes to complete give the
-  // "final flash" as growth finishes; afterwards the whole tree pulses.
+  // --- Glowing nodes: every fork AND tip FLASHES the moment it's reached (the
+  // arrival/"stop" flash), then twinkles — only a fraction light on any frame,
+  // giving a living shimmer instead of every node staying lit.
   ctx.globalCompositeOperation = 'lighter';     // glows add together, look hotter
 
   // forks = every segment's split point; reached once that segment is fully grown.
-  // Branch forks settle into a steady pulse; root forks just blink on arrival.
   for (const s of segments) {
     if (s.isRoot) continue;                       // roots: structure only, no lights
     const reached = s.gen < ph.gen || (s.gen === ph.gen && ph.growT >= 1);
     if (!reached) { s.litAt = undefined; continue; }  // reset if scrolled back past it
-    nodeGlow(s.splitX, s.splitY, s, now, 0.55, 0.7, true);
+    nodeGlow(s.splitX, s.splitY, s, now, 0.55, 0.7);
   }
   // tips = the absolute ends of every branch (the showcase — full size/brightness)
   for (const t of tips) {
@@ -593,7 +596,7 @@ function draw(p) {
     const tipGen = t.depth - 1;                   // gen of the segment ending here
     const reached = ph.gen > tipGen || (ph.gen === tipGen && ph.growT >= 1);
     if (!reached) { t.litAt = undefined; continue; }
-    nodeGlow(t.x, t.y, t, now, 1, 1, true);
+    nodeGlow(t.x, t.y, t, now, 1, 1);
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
