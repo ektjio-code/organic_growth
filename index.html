@@ -145,10 +145,6 @@ function resize(force) {
   W = w; H = window.innerHeight;
   cv.width = W * DPR; cv.height = H * DPR;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  // Glow size scales with the screen. Mobile shrinks the tree to fit, so a fixed
-  // 18px glow becomes huge relative to it and the additive node glows blow out —
-  // size it to the viewport on touch instead. Desktop stays at 18 exactly.
-  GLOW_R = TOUCH ? Math.max(7, Math.round(Math.min(W, H) * 0.020)) : 18;
   makeGlowSprite();     // pre-render the tip glow once (cheap to stamp later)
   makeVignette();       // pre-render the background vignette
   makeCompletedLayer(); // allocate the completed-growth cache (rebuilt on demand)
