@@ -440,6 +440,22 @@ function drawShearedCache(now) {
   }
 }
 
+// A node (a fork or a tip) flashes bright the moment it's reached, then settles
+// into a steady pulsation. Drawn with the pre-rendered glow sprite (cheap,
+// additive). obj holds .litAt so each node remembers its own ignition time.
+const IGNITE_MS = 650;        // duration of the arrival flash
+function nodeGlow(x, y, obj, now, sizeMul, alphaMul) {
+  if (obj.litAt === undefined) obj.litAt = now;
+  const age = now - obj.litAt;
+  const flash = age < IGNITE_MS ? Math.pow(1 - age / IGNITE_MS, 2) : 0;
+  const pulse = 0.5 + 0.5 * Math.sin(now * 0.0042 + (x + y) * 0.025);  // per-node phase
+  const scale = ((0.5 + 0.7 * pulse) + flash * 1.2) * sizeMul;
+  const r = GLOW_R * scale;
+  const ox = WIND ? windX(y, now) : 0;          // ride the swaying branch
+  ctx.globalAlpha = Math.min(1, ((0.45 + 0.55 * pulse) + flash * 0.9) * alphaMul);
+  ctx.drawImage(glowSprite, x + ox - r, y - r, r * 2, r * 2);
+}
+
 function draw(p) {
   ctx.clearRect(0, 0, W, H);
 
@@ -483,59 +499,24 @@ function draw(p) {
     ctx.shadowBlur = 0;
   }
 
-  // --- Glow at the split points of the CURRENT generation during dwell ---
-  // (the forks where this generation's branches just arrived)
-  if (ph.growT >= 1) {
-    // glow intensity: ramp up, hold, ramp down across the dwell, with a pulse
-    const d = ph.dwellT;
-    const env = Math.sin(Math.min(1, d) * Math.PI);       // 0→1→0 over dwell
-    const pulse = 0.7 + 0.3 * Math.sin(d * Math.PI * 4);  // shimmer
-    const intensity = env * pulse;
-
-    for (const s of segments) {
-      if (s.gen !== ph.gen) continue;
-      const rad = 2 + intensity * 6;
-      const ox = WIND ? windX(s.splitY, now) : 0;
-      ctx.fillStyle = `rgba(180,255,220,${0.9*intensity})`;
-      ctx.shadowColor = 'rgba(127,255,196,1)';
-      ctx.shadowBlur = 18 * intensity;
-      ctx.beginPath(); ctx.arc(s.splitX + ox, s.splitY, rad, 0, Math.PI*2); ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-  }
-
-  // steady small glow on all already-completed split points
-  for (const s of segments) {
-    if (s.gen >= ph.gen) continue;
-    const ox = WIND ? windX(s.splitY, now) : 0;
-    ctx.fillStyle = 'rgba(150,230,200,0.25)';
-    ctx.beginPath(); ctx.arc(s.splitX + ox, s.splitY, 1.6, 0, Math.PI*2); ctx.fill();
-  }
-
-  // --- Persistent lit tips: the absolute ends of every branch. ---
-  // Once a tip's generation has finished growing, it lights up and STAYS lit,
-  // pulsating. Drawn with the pre-rendered sprite (no per-tip shadowBlur).
-  const IGNITE_MS = 650;                        // bright flash when a tip first lights
+  // --- Glowing nodes: every fork AND tip flashes the moment it's reached, then
+  // settles into a persistent pulsation. The last nodes to complete give the
+  // "final flash" as growth finishes; afterwards the whole tree pulses.
   ctx.globalCompositeOperation = 'lighter';     // glows add together, look hotter
+
+  // forks = every segment's split point; reached once that segment is fully grown.
+  // Smaller + dimmer than tips so the many of them don't blow out to white.
+  for (const s of segments) {
+    const reached = s.gen < ph.gen || (s.gen === ph.gen && ph.growT >= 1);
+    if (!reached) { s.litAt = undefined; continue; }  // reset if scrolled back past it
+    nodeGlow(s.splitX, s.splitY, s, now, 0.55, 0.7);
+  }
+  // tips = the absolute ends of every branch (the showcase — full size/brightness)
   for (const t of tips) {
     const tipGen = t.depth - 1;                 // gen of the segment ending here
     const reached = ph.gen > tipGen || (ph.gen === tipGen && ph.growT >= 1);
-    if (!reached) { t.litAt = undefined; continue; }  // reset if scrolled back past it
-    if (t.litAt === undefined) t.litAt = now;         // remember first ignition
-
-    // ignition flash: 1 → 0 over IGNITE_MS (eased) — a bright burst that settles
-    const age = now - t.litAt;
-    const flash = age < IGNITE_MS ? Math.pow(1 - age / IGNITE_MS, 2) : 0;
-
-    // steady pulsation it settles into; per-tip phase offset
-    const pulse = 0.5 + 0.5 * Math.sin(now * 0.0042 + (t.x + t.y) * 0.025);
-
-    // blend: flash dominates at birth, pulse takes over as it fades
-    const scale = (0.5 + 0.7 * pulse) + flash * 1.2;  // sprite size: big burst → breathe
-    const r = GLOW_R * scale;
-    const ox = WIND ? windX(t.y, now) : 0;            // ride the swaying branch tip
-    ctx.globalAlpha = Math.min(1, (0.45 + 0.55 * pulse) + flash * 0.9);
-    ctx.drawImage(glowSprite, t.x + ox - r, t.y - r, r * 2, r * 2);
+    if (!reached) { t.litAt = undefined; continue; }
+    nodeGlow(t.x, t.y, t, now, 1, 1);
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
