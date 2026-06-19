@@ -181,7 +181,8 @@ function makeVignette() {
   vignette.height = Math.ceil(H * DPR);
   const o = vignette.getContext('2d');
   o.setTransform(DPR, 0, 0, DPR, 0, 0);
-  const grd = o.createRadialGradient(W*0.5, H*0.9, 0, W*0.5, H*0.9, H*0.7);
+  const sy = (TOUCH ? 0.5 : 0.9) * H;          // glow follows the seed (centered on mobile)
+  const grd = o.createRadialGradient(W*0.5, sy, 0, W*0.5, sy, H*0.7);
   grd.addColorStop(0, 'rgba(20,40,55,0.5)');
   grd.addColorStop(1, 'rgba(5,7,13,0)');
   o.fillStyle = grd; o.fillRect(0, 0, W, H);
@@ -238,9 +239,10 @@ function buildTree() {
   const rand = mulberry32(20260615);   // fixed seed
 
   const baseX = W * 0.5;
-  const baseY = H * 0.94;              // seed near bottom
+  // Mobile seeds at screen center (branches grow up, roots grow down); desktop near bottom.
+  const baseY = TOUCH ? H * 0.5 : H * 0.94;
   const trunkLen = H * 0.20;
-  groundY = baseY;                     // wind sway grows with height above this
+  groundY = baseY;                     // wind sway grows with height above this; roots below don't sway
 
   // recursive grow: returns nothing, pushes segments
   // order is a 0..1 "growth time" — deeper = later
@@ -279,11 +281,40 @@ function buildTree() {
     }
   }
 
+  // roots: downward, randomized, finer/tighter splits, tapering (pointed) tips.
+  // Pushed into the same segments/tips arrays (flagged isRoot) so they grow,
+  // cache and draw with the branches — just lit differently (blink, not steady).
+  function growRoots(x, y, angle, len, width, depth, order) {
+    if (depth > 9 || len < 5) { tips.push({ x, y, order, depth, isRoot: true }); return; }
+    const drift = (rand() - 0.5) * 0.30;            // roots wiggle more than branches
+    const a = angle + drift;
+    const x1 = x + Math.cos(a) * len;
+    const y1 = y + Math.sin(a) * len;
+    segments.push({ x0:x, y0:y, x1, y1, depth, width, order, gen: depth, splitX:x1, splitY:y1, isRoot:true });
+    maxOrder = Math.max(maxOrder, order);
+    maxGen = Math.max(maxGen, depth);
+    const r = rand();
+    const children = r < 0.25 ? 2 : 3;              // roots branch a touch more
+    for (let i = 0; i < children; i++) {
+      const spread = 0.16 + rand() * 0.22;          // tighter forks = "smaller splits"
+      const dir = (i - (children-1)/2) * spread + (rand()-0.5) * 0.20;
+      const childLen = len * (0.68 + rand() * 0.12);
+      const childW = width * 0.58;                  // strong taper toward pointed tips
+      growRoots(x1, y1, a + dir, childLen, childW, depth + 1, order + 0.055 + rand()*0.085);
+    }
+  }
+
   // upward = negative Y. trunk points up (-PI/2)
   grow(baseX, baseY, -Math.PI/2, trunkLen, Math.max(W,H)*0.012, 0, 0);
 
-  fitTree(baseX, baseY);   // scale to fit the viewport (esp. tall/narrow phones)
-  if (TOUCH) tallerMobile(baseY);   // mobile: stretch vertically for a taller tree
+  if (TOUCH) {
+    // grow roots downward (+PI/2) in sync, then fit the whole figure around the
+    // centered seed: canopy toward the top, roots toward the bottom.
+    growRoots(baseX, baseY, Math.PI/2, H * 0.16, Math.max(W,H) * 0.010, 0, 0);
+    fitTreeCentered(baseX, baseY);
+  } else {
+    fitTree(baseX, baseY);   // scale to fit the viewport (esp. tall/narrow phones)
+  }
 
   // normalize order to 0..1
   segments.forEach(s => s.order /= maxOrder);
@@ -324,24 +355,36 @@ function fitTree(baseX, baseY) {
   }
 }
 
-// ---- Mobile: taller tree ----
-// On phones the tree is width-constrained, leaving empty vertical space. Stretch
-// it vertically (anchored at the seed) to ~1.85× its height, clamped so the
-// canopy stays inside the top margin. Vertical-only, so widths/glow are unchanged.
-function tallerMobile(baseY) {
-  const TALL = 1.85;                          // just under double
-  let minY = baseY;
-  for (const s of segments) minY = Math.min(minY, s.y0, s.y1);
-  for (const t of tips) minY = Math.min(minY, t.y);
-  const maxFactor = (baseY - H * 0.05) / (baseY - minY);  // keep 5% top margin
-  const f = Math.min(TALL, maxFactor);
-  if (f <= 1.0001) return;
+// ---- Mobile: fit the centered figure (branches up + roots down) ----
+// Seed sits at screen center. Scale uniformly (anchored at the seed) so the
+// canopy reaches near the top and the roots near the bottom, without exceeding
+// the side margins. No cap at 1 — the natural figure overflows, so this shrinks.
+function fitTreeCentered(baseX, baseY) {
+  let minX = baseX, maxX = baseX, minY = baseY, maxY = baseY;
   for (const s of segments) {
-    s.y0 = baseY + (s.y0 - baseY) * f;
-    s.y1 = baseY + (s.y1 - baseY) * f;
-    s.splitY = baseY + (s.splitY - baseY) * f;
+    minX = Math.min(minX, s.x0, s.x1); maxX = Math.max(maxX, s.x0, s.x1);
+    minY = Math.min(minY, s.y0, s.y1); maxY = Math.max(maxY, s.y0, s.y1);
   }
-  for (const t of tips) t.y = baseY + (t.y - baseY) * f;
+  for (const t of tips) {
+    minX = Math.min(minX, t.x); maxX = Math.max(maxX, t.x);
+    minY = Math.min(minY, t.y); maxY = Math.max(maxY, t.y);
+  }
+  const halfExtent = Math.max(baseX - minX, maxX - baseX, 1);
+  const upH   = Math.max(baseY - minY, 1);          // branches, above the seed
+  const downH = Math.max(maxY - baseY, 1);          // roots, below the seed
+  const scaleW    = (W * 0.45) / halfExtent;        // ~5% side margins
+  const scaleUp   = (baseY - H * 0.06) / upH;       // canopy ~6% from the top
+  const scaleDown = (H * 0.94 - baseY) / downH;     // roots ~6% from the bottom
+  const scale = Math.min(scaleW, scaleUp, scaleDown);
+  for (const s of segments) {
+    s.x0 = baseX + (s.x0 - baseX) * scale; s.y0 = baseY + (s.y0 - baseY) * scale;
+    s.x1 = baseX + (s.x1 - baseX) * scale; s.y1 = baseY + (s.y1 - baseY) * scale;
+    s.splitX = baseX + (s.splitX - baseX) * scale; s.splitY = baseY + (s.splitY - baseY) * scale;
+    s.width *= scale;
+  }
+  for (const t of tips) {
+    t.x = baseX + (t.x - baseX) * scale; t.y = baseY + (t.y - baseY) * scale;
+  }
 }
 
 // ---- Hotspots ----
@@ -355,9 +398,9 @@ let hotspots = [];
 function pickHotspots() {
   hotspots = [];
   hotspotDefs.forEach(def => {
-    // find the tip whose order is closest to def.at
+    // find the (branch) tip whose order is closest to def.at — never a root
     let best = null, bestD = 1e9;
-    tips.forEach(t => { const d = Math.abs(t.order - def.at); if (d < bestD){bestD=d;best=t;} });
+    tips.forEach(t => { if (t.isRoot) return; const d = Math.abs(t.order - def.at); if (d < bestD){bestD=d;best=t;} });
     if (best) hotspots.push({ ...def, x: best.x, y: best.y, order: best.order });
   });
   renderHotspotDom();
@@ -444,15 +487,20 @@ function drawShearedCache(now) {
 // into a steady pulsation. Drawn with the pre-rendered glow sprite (cheap,
 // additive). obj holds .litAt so each node remembers its own ignition time.
 const IGNITE_MS = 650;        // duration of the arrival flash
-function nodeGlow(x, y, obj, now, sizeMul, alphaMul) {
+// persist=true → flash then settle into a steady pulsation (branches/canopy).
+// persist=false → flash once on arrival, then go dark (roots: blink only).
+function nodeGlow(x, y, obj, now, sizeMul, alphaMul, persist) {
   if (obj.litAt === undefined) obj.litAt = now;
   const age = now - obj.litAt;
   const flash = age < IGNITE_MS ? Math.pow(1 - age / IGNITE_MS, 2) : 0;
-  const pulse = 0.5 + 0.5 * Math.sin(now * 0.0042 + (x + y) * 0.025);  // per-node phase
+  const pulse = persist ? 0.5 + 0.5 * Math.sin(now * 0.0042 + (x + y) * 0.025) : 0;
+  const base = persist ? 0.45 + 0.55 * pulse : 0;   // roots have no steady component
+  const alpha = (base + flash * 0.9) * alphaMul;
+  if (alpha <= 0.004) return;                        // roots vanish once the blink fades
   const scale = ((0.5 + 0.7 * pulse) + flash * 1.2) * sizeMul;
   const r = GLOW_R * scale;
-  const ox = WIND ? windX(y, now) : 0;          // ride the swaying branch
-  ctx.globalAlpha = Math.min(1, ((0.45 + 0.55 * pulse) + flash * 0.9) * alphaMul);
+  const ox = WIND ? windX(y, now) : 0;               // ride the swaying branch (0 for roots)
+  ctx.globalAlpha = Math.min(1, alpha);
   ctx.drawImage(glowSprite, x + ox - r, y - r, r * 2, r * 2);
 }
 
@@ -505,18 +553,20 @@ function draw(p) {
   ctx.globalCompositeOperation = 'lighter';     // glows add together, look hotter
 
   // forks = every segment's split point; reached once that segment is fully grown.
-  // Smaller + dimmer than tips so the many of them don't blow out to white.
+  // Branch forks settle into a steady pulse; root forks just blink on arrival.
   for (const s of segments) {
     const reached = s.gen < ph.gen || (s.gen === ph.gen && ph.growT >= 1);
     if (!reached) { s.litAt = undefined; continue; }  // reset if scrolled back past it
-    nodeGlow(s.splitX, s.splitY, s, now, 0.55, 0.7);
+    if (s.isRoot) nodeGlow(s.splitX, s.splitY, s, now, 0.5, 0.85, false);
+    else          nodeGlow(s.splitX, s.splitY, s, now, 0.55, 0.7, true);
   }
-  // tips = the absolute ends of every branch (the showcase — full size/brightness)
+  // tips = the absolute ends. Branch tips stay lit (the showcase); root tips blink.
   for (const t of tips) {
     const tipGen = t.depth - 1;                 // gen of the segment ending here
     const reached = ph.gen > tipGen || (ph.gen === tipGen && ph.growT >= 1);
     if (!reached) { t.litAt = undefined; continue; }
-    nodeGlow(t.x, t.y, t, now, 1, 1);
+    if (t.isRoot) nodeGlow(t.x, t.y, t, now, 0.7, 0.95, false);
+    else          nodeGlow(t.x, t.y, t, now, 1, 1, true);
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
