@@ -22,99 +22,20 @@
   }
   canvas { display: block; width: 100%; height: 100%; }
 
-  /* Copy that fades in at scroll milestones */
-  .copy {
-    position: fixed; z-index: 20; pointer-events: none;
-    opacity: 0; transition: opacity .6s ease;
-    text-align: center; left: 50%; transform: translateX(-50%);
-    width: 90%; max-width: 640px;
-  }
-  .copy.show { opacity: 1; }
-  .copy h1 { font-size: clamp(28px, 5vw, 56px); font-weight: 600; letter-spacing: -0.02em; }
-  .copy h2 { font-size: clamp(22px, 4vw, 40px); font-weight: 500; letter-spacing: -0.02em; }
-  .copy p  { font-size: clamp(15px, 2.2vw, 19px); color: #9aa6bd; margin-top: 14px; font-weight: 400; }
-
-  #c-seed   { top: 18%; }
-  #c-branch { top: 14%; }
-  #c-canopy { top: 12%; }
-
-  /* Feature hotspot tooltips (positioned in JS over the canvas) */
-  #hotspot-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
-  .hotspot {
-    position: absolute; pointer-events: none; cursor: pointer;
-    transform: translate(-50%, -50%);
-    opacity: 0; transition: opacity .4s ease;
-  }
-  .hotspot.show { opacity: 1; pointer-events: auto; }
-  .hotspot .dot {
-    width: 12px; height: 12px; border-radius: 50%;
-    background: #7fffc4; box-shadow: 0 0 12px 3px rgba(127,255,196,.6);
-    animation: pulse 2.2s infinite ease-in-out;
-  }
-  @keyframes pulse { 0%,100%{transform:scale(1);opacity:.85} 50%{transform:scale(1.5);opacity:1} }
-  .hotspot .label {
-    position: absolute; left: 22px; top: 50%; transform: translateY(-50%);
-    white-space: nowrap; background: rgba(12,18,30,.92); border: 1px solid rgba(127,255,196,.3);
-    padding: 9px 14px; border-radius: 10px; font-size: 13px; line-height: 1.4;
-    backdrop-filter: blur(8px); opacity: 0; transition: opacity .25s ease;
-    box-shadow: 0 8px 24px rgba(0,0,0,.4);
-  }
-  .hotspot .label b { color: #7fffc4; display:block; font-size: 12px; margin-bottom: 2px; letter-spacing: .04em; text-transform: uppercase; }
-  .hotspot:hover .label,
-  .hotspot.open .label { opacity: 1; }
-
-  /* Metric counter at the end */
-  #metric {
-    position: fixed; bottom: 12%; left: 50%; transform: translateX(-50%);
-    z-index: 20; text-align: center; opacity: 0; transition: opacity .8s ease;
-  }
-  #metric.show { opacity: 1; }
-  #metric .num { font-size: clamp(40px, 8vw, 88px); font-weight: 700; color: #7fffc4; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-  #metric .cap { font-size: 14px; color: #9aa6bd; letter-spacing: .08em; text-transform: uppercase; margin-top: 6px; }
-
   #hint {
     position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 40;
     color: #5d6b85; font-size: 13px; letter-spacing: .1em; text-transform: uppercase;
     animation: fade 2.4s infinite; transition: opacity .4s;
   }
   @keyframes fade { 0%,100%{opacity:.35} 50%{opacity:.9} }
-
-  /* tiny debug readout */
-  #dbg { position: fixed; top: 12px; left: 12px; z-index: 50; font-size: 11px;
-         color: #44506a; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
-
-<div id="dbg">growth: <span id="d-g">0</span>%</div>
 
 <div id="track">
   <div id="stage">
     <canvas id="cv"></canvas>
   </div>
-</div>
-
-<!-- Scroll-milestone copy -->
-<div class="copy" id="c-seed">
-  <h1>One command.</h1>
-  <p>Set it once. Then step away.</p>
-</div>
-<div class="copy" id="c-branch">
-  <h2>It grows on its own.</h2>
-  <p>Distributed naturally — never on a schedule, never the same twice.</p>
-</div>
-<div class="copy" id="c-canopy">
-  <h2>Organic growth.</h2>
-  <p>A presence that compounds, paced like something alive.</p>
-</div>
-
-<!-- Hotspots (positioned over branch points in JS) -->
-<div id="hotspot-layer"></div>
-
-<!-- End metric -->
-<div id="metric">
-  <div class="num" id="m-num">0</div>
-  <div class="cap">actions grown from a single command</div>
 </div>
 
 <div id="hint">Scroll to grow ↓</div>
@@ -252,7 +173,7 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
 // ---- The branching system ----
 // Each segment: x0,y0,x1,y1, depth, width, order (0..1 = when it appears during growth)
 let segments = [];
-let tips = [];          // branch endpoints, for hotspots/leaves
+let tips = [];          // branch endpoints (the absolute ends)
 let maxOrder = 1;
 let maxGen = 0;         // deepest generation = number of growth steps
 
@@ -364,9 +285,6 @@ function buildTree() {
   // normalize order to 0..1
   segments.forEach(s => s.order /= maxOrder);
   tips.forEach(t => t.order /= maxOrder);
-
-  // pick a few tips as feature hotspots (spread across growth time)
-  pickHotspots();
 }
 
 // ---- Fit the tree to the viewport ----
@@ -429,43 +347,6 @@ function fitTreeCentered(baseX, baseY) {
   for (const t of tips) {
     t.x = baseX + (t.x - baseX) * scale; t.y = baseY + (t.y - baseY) * scale;
   }
-}
-
-// ---- Hotspots ----
-const hotspotDefs = [
-  { title: "Hands-off",   text: "One setup. It runs without you.", at: 0.10 },
-  { title: "Distributed", text: "One command, fanned out across your presence.", at: 0.52 },
-  { title: "Organic pace", text: "Timed like a human — never a pattern.", at: 0.80 },
-  { title: "Compounding",  text: "Reach that keeps building on itself.", at: 0.97 },
-];
-let hotspots = [];
-function pickHotspots() {
-  hotspots = [];
-  hotspotDefs.forEach(def => {
-    // find the (branch) tip whose order is closest to def.at — never a root
-    let best = null, bestD = 1e9;
-    tips.forEach(t => { if (t.isRoot) return; const d = Math.abs(t.order - def.at); if (d < bestD){bestD=d;best=t;} });
-    if (best) hotspots.push({ ...def, x: best.x, y: best.y, order: best.order });
-  });
-  renderHotspotDom();
-}
-function renderHotspotDom() {
-  const layer = document.getElementById('hotspot-layer');
-  layer.innerHTML = '';
-  hotspots.forEach((h, i) => {
-    const el = document.createElement('div');
-    el.className = 'hotspot'; el.id = 'hs'+i;
-    el.style.left = h.x + 'px'; el.style.top = h.y + 'px';
-    el.innerHTML = `<div class="dot"></div><div class="label"><b>${h.title}</b>${h.text}</div>`;
-    // Touch devices have no :hover, so tap toggles the label (and closes others).
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const wasOpen = el.classList.contains('open');
-      layer.querySelectorAll('.hotspot.open').forEach(o => o.classList.remove('open'));
-      if (!wasOpen) el.classList.add('open');
-    });
-    layer.appendChild(el);
-  });
 }
 
 // ---- Stepped playback model ----
@@ -638,29 +519,12 @@ function advanceGrowth() {
 }
 
 function updateUI(p) {
-  const ph = phaseFromScroll(p);
-  document.getElementById('d-g').textContent =
-    'gen ' + ph.gen + '/' + maxGen + (ph.dwellT > 0 ? ' · glow' : ' · grow');
-
-  toggle('c-seed',   p > 0.02 && p < 0.16);
-  toggle('c-branch', p > 0.34 && p < 0.52);
-  toggle('c-canopy', p > 0.74 && p < 0.90);
-
-  hotspots.forEach((h,i) => toggle('hs'+i, p >= h.order * 0.95 + 0.02));
-
-  const m = document.getElementById('metric');
-  if (p > 0.92) {
-    m.classList.add('show');
-    const q = Math.min(1, (p - 0.92) / 0.08);
-    document.getElementById('m-num').textContent = Math.round(q * 14200).toLocaleString();
-  } else m.classList.remove('show');
-
-  // Desktop hint hides once growth starts; touch hint keeps prompting until done.
+  // The only UI left is the grow hint. Desktop hides it once growth starts;
+  // touch keeps prompting until fully grown.
   const done = tapStep >= TAP_STEPS;
   document.getElementById('hint').style.opacity =
     (TOUCH ? done : p > 0.04) ? '0' : '';
 }
-function toggle(id, on){ const e=document.getElementById(id); if(e) e.classList.toggle('show', on); }
 
 // rAF smoothing loop
 let lastFrame = 0;
@@ -680,13 +544,8 @@ function loop(ts) {
 
 window.addEventListener('resize', () => resize(), { passive:true });
 window.addEventListener('orientationchange', () => resize(true), { passive:true });
-// Tap closes an open hotspot label; on touch it also advances the growth one step.
-// (Hotspot taps call stopPropagation, so tapping a dot never advances growth.)
-document.addEventListener('click', () => {
-  const hadOpen = document.querySelectorAll('.hotspot.open').length > 0;
-  document.querySelectorAll('.hotspot.open').forEach(o => o.classList.remove('open'));
-  if (TOUCH && !hadOpen) advanceGrowth();   // don't grow on the tap that closes a label
-});
+// On touch, a tap advances the growth one step.
+document.addEventListener('click', () => { if (TOUCH) advanceGrowth(); });
 
 if (TOUCH) {
   track.style.height = '100vh';              // no scroll needed; tap drives it
