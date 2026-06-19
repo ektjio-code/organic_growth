@@ -41,11 +41,11 @@
   /* Feature hotspot tooltips (positioned in JS over the canvas) */
   #hotspot-layer { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
   .hotspot {
-    position: absolute; pointer-events: auto; cursor: pointer;
+    position: absolute; pointer-events: none; cursor: pointer;
     transform: translate(-50%, -50%);
     opacity: 0; transition: opacity .4s ease;
   }
-  .hotspot.show { opacity: 1; }
+  .hotspot.show { opacity: 1; pointer-events: auto; }
   .hotspot .dot {
     width: 12px; height: 12px; border-radius: 50%;
     background: #7fffc4; box-shadow: 0 0 12px 3px rgba(127,255,196,.6);
@@ -125,10 +125,15 @@ const ctx = cv.getContext('2d');
 const track = document.getElementById('track');
 let W, H, DPR;
 
+// Touch devices: no hover, coarse pointer. Drives tap-to-grow + lighter render.
+const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
+
 let lastW = -1;
 function resize(force) {
   const w = window.innerWidth;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Cap DPR lower on mobile — fill cost scales with DPR², and the wind redraws
+  // the whole canvas every frame, so this is the single biggest mobile win.
+  const dpr = Math.min(window.devicePixelRatio || 1, TOUCH ? 1.25 : 2);
   // On mobile the browser address bar shows/hides as you scroll, which changes
   // innerHeight constantly. Rebuilding the whole tree on every height twitch
   // makes it jump, so only do the full rebuild on a real layout change — width
@@ -277,12 +282,45 @@ function buildTree() {
   // upward = negative Y. trunk points up (-PI/2)
   grow(baseX, baseY, -Math.PI/2, trunkLen, Math.max(W,H)*0.012, 0, 0);
 
+  fitTree(baseX, baseY);   // scale to fit the viewport (esp. tall/narrow phones)
+
   // normalize order to 0..1
   segments.forEach(s => s.order /= maxOrder);
   tips.forEach(t => t.order /= maxOrder);
 
   // pick a few tips as feature hotspots (spread across growth time)
   pickHotspots();
+}
+
+// ---- Fit the tree to the viewport ----
+// Measure the grown tree's extent and, if it overflows, scale it down (anchored
+// at the seed) so it sits within the frame with margins. Only ever shrinks, so a
+// tree that already fits (e.g. desktop) is left exactly as-is.
+function fitTree(baseX, baseY) {
+  let minX = baseX, maxX = baseX, minY = baseY;
+  for (const s of segments) {
+    minX = Math.min(minX, s.x0, s.x1);
+    maxX = Math.max(maxX, s.x0, s.x1);
+    minY = Math.min(minY, s.y0, s.y1);
+  }
+  for (const t of tips) {
+    minX = Math.min(minX, t.x); maxX = Math.max(maxX, t.x); minY = Math.min(minY, t.y);
+  }
+  const halfExtent = Math.max(baseX - minX, maxX - baseX, 1); // widest side from trunk
+  const treeH = Math.max(baseY - minY, 1);
+  const scaleW = (W * 0.45) / halfExtent;        // ~5% margin each side
+  const scaleH = (baseY - H * 0.08) / treeH;     // ~8% margin above the canopy
+  const scale = Math.min(scaleW, scaleH, 1);     // never zoom in
+  if (scale >= 0.999) return;
+  for (const s of segments) {
+    s.x0 = baseX + (s.x0 - baseX) * scale; s.y0 = baseY + (s.y0 - baseY) * scale;
+    s.x1 = baseX + (s.x1 - baseX) * scale; s.y1 = baseY + (s.y1 - baseY) * scale;
+    s.splitX = baseX + (s.splitX - baseX) * scale; s.splitY = baseY + (s.splitY - baseY) * scale;
+    s.width *= scale;
+  }
+  for (const t of tips) {
+    t.x = baseX + (t.x - baseX) * scale; t.y = baseY + (t.y - baseY) * scale;
+  }
 }
 
 // ---- Hotspots ----
@@ -363,7 +401,7 @@ function windX(y, t) {
 
 // Blit the cached tree as horizontal strips, each offset sideways by its sway.
 function drawShearedCache(now) {
-  const STRIPS = 48;
+  const STRIPS = TOUCH ? 24 : 48;
   const band = H / STRIPS;
   const over = 1;                             // 1px overlap hides seams between strips
   for (let i = 0; i < STRIPS; i++) {
@@ -478,12 +516,18 @@ function draw(p) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-// ---- Scroll → progress binding ----
+// ---- Progress binding ----
+// Desktop: scroll position drives growth. Touch: each tap advances one step.
 let targetP = 0, curP = 0;
+let tapStep = 0;                    // touch: how many growth steps revealed
 function scrollProgress() {
   const scrollable = track.offsetHeight - window.innerHeight;
   const y = Math.min(Math.max(window.scrollY, 0), scrollable);
   return scrollable > 0 ? y / scrollable : 0;
+}
+function advanceGrowth() {
+  const steps = maxGen + 1;
+  if (tapStep < steps) tapStep++;
 }
 
 function updateUI(p) {
@@ -504,26 +548,44 @@ function updateUI(p) {
     document.getElementById('m-num').textContent = Math.round(q * 14200).toLocaleString();
   } else m.classList.remove('show');
 
-  document.getElementById('hint').style.opacity = p > 0.04 ? '0' : '';
+  // Desktop hint hides once growth starts; touch hint keeps prompting until done.
+  const done = tapStep >= (maxGen + 1);
+  document.getElementById('hint').style.opacity =
+    (TOUCH ? done : p > 0.04) ? '0' : '';
 }
 function toggle(id, on){ const e=document.getElementById(id); if(e) e.classList.toggle('show', on); }
 
 // rAF smoothing loop
-function loop() {
-  targetP = scrollProgress();
+let lastFrame = 0;
+function loop(ts) {
+  requestAnimationFrame(loop);
+  // Cap to ~30fps on mobile — the wind redraws the whole canvas every frame,
+  // and 30fps halves that cost while still reading as smooth sway.
+  if (TOUCH && ts - lastFrame < 33) return;
+  lastFrame = ts;
+
+  targetP = TOUCH ? Math.min(1, tapStep / (maxGen + 1)) : scrollProgress();
   curP += (targetP - curP) * 0.12;
   if (Math.abs(targetP - curP) < 0.0002) curP = targetP;
   draw(curP);
   updateUI(curP);
-  requestAnimationFrame(loop);
 }
 
 window.addEventListener('resize', () => resize(), { passive:true });
 window.addEventListener('orientationchange', () => resize(true), { passive:true });
-// Tap anywhere else closes an open hotspot label.
+// Tap closes an open hotspot label; on touch it also advances the growth one step.
+// (Hotspot taps call stopPropagation, so tapping a dot never advances growth.)
 document.addEventListener('click', () => {
+  const hadOpen = document.querySelectorAll('.hotspot.open').length > 0;
   document.querySelectorAll('.hotspot.open').forEach(o => o.classList.remove('open'));
+  if (TOUCH && !hadOpen) advanceGrowth();   // don't grow on the tap that closes a label
 });
+
+if (TOUCH) {
+  track.style.height = '100vh';              // no scroll needed; tap drives it
+  document.getElementById('hint').textContent = 'Tap to grow';
+}
+
 resize(true);
 loop();
 </script>
