@@ -60,7 +60,8 @@
     box-shadow: 0 8px 24px rgba(0,0,0,.4);
   }
   .hotspot .label b { color: #7fffc4; display:block; font-size: 12px; margin-bottom: 2px; letter-spacing: .04em; text-transform: uppercase; }
-  .hotspot:hover .label { opacity: 1; }
+  .hotspot:hover .label,
+  .hotspot.open .label { opacity: 1; }
 
   /* Metric counter at the end */
   #metric {
@@ -124,9 +125,19 @@ const ctx = cv.getContext('2d');
 const track = document.getElementById('track');
 let W, H, DPR;
 
-function resize() {
-  DPR = Math.min(window.devicePixelRatio || 1, 2);
-  W = window.innerWidth; H = window.innerHeight;
+let lastW = -1;
+function resize(force) {
+  const w = window.innerWidth;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // On mobile the browser address bar shows/hides as you scroll, which changes
+  // innerHeight constantly. Rebuilding the whole tree on every height twitch
+  // makes it jump, so only do the full rebuild on a real layout change — width
+  // (covers orientation flips) or DPR. Height-only changes are ignored; the
+  // canvas is CSS-stretched to fill, which is imperceptible during the transition.
+  if (!force && w === lastW && dpr === DPR) return;
+  lastW = w;
+  DPR = dpr;
+  W = w; H = window.innerHeight;
   cv.width = W * DPR; cv.height = H * DPR;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   makeGlowSprite();     // pre-render the tip glow once (cheap to stamp later)
@@ -300,6 +311,13 @@ function renderHotspotDom() {
     el.className = 'hotspot'; el.id = 'hs'+i;
     el.style.left = h.x + 'px'; el.style.top = h.y + 'px';
     el.innerHTML = `<div class="dot"></div><div class="label"><b>${h.title}</b>${h.text}</div>`;
+    // Touch devices have no :hover, so tap toggles the label (and closes others).
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasOpen = el.classList.contains('open');
+      layer.querySelectorAll('.hotspot.open').forEach(o => o.classList.remove('open'));
+      if (!wasOpen) el.classList.add('open');
+    });
     layer.appendChild(el);
   });
 }
@@ -500,8 +518,13 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-window.addEventListener('resize', resize, { passive:true });
-resize();
+window.addEventListener('resize', () => resize(), { passive:true });
+window.addEventListener('orientationchange', () => resize(true), { passive:true });
+// Tap anywhere else closes an open hotspot label.
+document.addEventListener('click', () => {
+  document.querySelectorAll('.hotspot.open').forEach(o => o.classList.remove('open'));
+});
+resize(true);
 loop();
 </script>
 </body>
