@@ -1,0 +1,7 @@
+# Claude Code session / tooling data
+.claude/
+
+# OS cruft
+Thumbs.db
+.DS_Store
+desktop.ini
