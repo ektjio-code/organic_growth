@@ -285,12 +285,12 @@ function buildTree() {
   // Pushed into the same segments/tips arrays (flagged isRoot) so they grow,
   // cache and draw with the branches — just lit differently (blink, not steady).
   function growRoots(x, y, angle, len, width, depth, order) {
-    if (depth > 9 || len < 5) { tips.push({ x, y, order, depth, isRoot: true }); return; }
-    const drift = (rand() - 0.5) * 0.4;
+    if (depth > 9 || len < 4) { tips.push({ x, y, order, depth, isRoot: true }); return; }
+    const drift = (rand() - 0.5) * 0.35;
     let a = angle + drift;
-    // mild outward spread so roots fan radially (still descend), not a tidy crown
+    // mild outward spread so roots fan wide (still descend), not a tidy crown
     const horiz = a < Math.PI / 2 ? 0 : Math.PI;
-    a = a * 0.78 + horiz * 0.22;
+    a = a * 0.8 + horiz * 0.2;
     a = Math.max(0.12, Math.min(Math.PI - 0.12, a)); // stay just below the seed line
     const x1 = x + Math.cos(a) * len;
     const y1 = y + Math.sin(a) * len;
@@ -298,12 +298,12 @@ function buildTree() {
     maxOrder = Math.max(maxOrder, order);
     maxGen = Math.max(maxGen, depth);
     const r = rand();
-    const children = r < 0.3 ? 3 : 2;                // dense via many fine generations
+    const children = r < 0.4 ? 1 : 2;                // sparse — few splits
     for (let i = 0; i < children; i++) {
-      const spread = 0.4 + rand() * 0.5;             // wide, irregular forks
+      const spread = 0.55 + rand() * 0.6;            // WIDE forks
       const dir = (i - (children-1)/2) * spread + (rand()-0.5) * 0.4;
-      const childLen = len * (0.58 + rand() * 0.12); // short, fine → fibrous
-      const childW = width * 0.55;                   // strong taper → pointed tips
+      const childLen = len * (0.80 + rand() * 0.10); // way longer (slow taper in length)
+      const childW = width * 0.62;                   // tapers toward pointed tips
       growRoots(x1, y1, a + dir, childLen, childW, depth + 1, order + 0.04 + rand()*0.07);
     }
   }
@@ -312,14 +312,14 @@ function buildTree() {
   grow(baseX, baseY, -Math.PI/2, trunkLen, Math.max(W,H)*0.012, 0, 0);
 
   if (TOUCH) {
-    // Roots are NOT a mirror: a dense fan of primaries radiates across the lower
-    // semicircle (wide + shallow) and forks into fine, pointed tendrils — a fibrous
-    // root mat, no lights. Then fit the whole figure around the centered seed.
-    const primaries = 7 + Math.floor(rand() * 3);   // 7–9 radiating primary roots
+    // Roots are NOT a mirror: a few long primaries radiate across the lower
+    // semicircle, forking sparsely at wide angles into long, pointed tendrils
+    // (no lights). They may run off-screen — only the canopy is fitted.
+    const primaries = 5 + Math.floor(rand() * 2);   // 5–6 long primary roots
     for (let i = 0; i < primaries; i++) {
       const ang = 0.3 + (i / (primaries - 1)) * (Math.PI - 0.6) + (rand()-0.5) * 0.2;
-      const len = H * 0.10 * (0.85 + rand() * 0.4);
-      growRoots(baseX, baseY, ang, len, Math.max(W,H) * 0.010, 0, 0);
+      const len = H * 0.16 * (0.85 + rand() * 0.45);
+      growRoots(baseX, baseY, ang, len, Math.max(W,H) * 0.011, 0, 0);
     }
     fitTreeCentered(baseX, baseY);
   } else {
@@ -365,27 +365,26 @@ function fitTree(baseX, baseY) {
   }
 }
 
-// ---- Mobile: fit the centered figure (branches up + roots down) ----
+// ---- Mobile: fit the canopy around the centered seed ----
 // Seed sits at screen center. Scale uniformly (anchored at the seed) so the
-// canopy reaches near the top and the roots near the bottom, without exceeding
-// the side margins. No cap at 1 — the natural figure overflows, so this shrinks.
+// CANOPY reaches near the top without exceeding the side margins. Roots are
+// excluded from the measurement — they're allowed to run long and off-screen.
 function fitTreeCentered(baseX, baseY) {
-  let minX = baseX, maxX = baseX, minY = baseY, maxY = baseY;
+  let minX = baseX, maxX = baseX, minY = baseY;
   for (const s of segments) {
+    if (s.isRoot) continue;
     minX = Math.min(minX, s.x0, s.x1); maxX = Math.max(maxX, s.x0, s.x1);
-    minY = Math.min(minY, s.y0, s.y1); maxY = Math.max(maxY, s.y0, s.y1);
+    minY = Math.min(minY, s.y0, s.y1);
   }
   for (const t of tips) {
-    minX = Math.min(minX, t.x); maxX = Math.max(maxX, t.x);
-    minY = Math.min(minY, t.y); maxY = Math.max(maxY, t.y);
+    if (t.isRoot) continue;
+    minX = Math.min(minX, t.x); maxX = Math.max(maxX, t.x); minY = Math.min(minY, t.y);
   }
   const halfExtent = Math.max(baseX - minX, maxX - baseX, 1);
-  const upH   = Math.max(baseY - minY, 1);          // branches, above the seed
-  const downH = Math.max(maxY - baseY, 1);          // roots, below the seed
-  const scaleW    = (W * 0.45) / halfExtent;        // ~5% side margins
-  const scaleUp   = (baseY - H * 0.06) / upH;       // canopy ~6% from the top
-  const scaleDown = (H * 0.94 - baseY) / downH;     // roots ~6% from the bottom
-  const scale = Math.min(scaleW, scaleUp, scaleDown);
+  const upH = Math.max(baseY - minY, 1);            // branches, above the seed
+  const scaleW  = (W * 0.45) / halfExtent;          // ~5% side margins (canopy)
+  const scaleUp = (baseY - H * 0.06) / upH;         // canopy ~6% from the top
+  const scale = Math.min(scaleW, scaleUp);
   for (const s of segments) {
     s.x0 = baseX + (s.x0 - baseX) * scale; s.y0 = baseY + (s.y0 - baseY) * scale;
     s.x1 = baseX + (s.x1 - baseX) * scale; s.y1 = baseY + (s.y1 - baseY) * scale;
