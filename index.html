@@ -45,7 +45,7 @@
   .corner { position: absolute; font-size: 13.5px; line-height: 1.7; color: var(--phos-dim); }
   .corner .key { color: var(--phos-dim); }
   .corner .val { color: var(--phos); }
-  .brand { display:inline-block; font-weight:700; font-size:22px; line-height:1;
+  .brand { display:inline-block; font-weight:700; font-size:26px; line-height:1;
            color: var(--phos); border:1px solid var(--phos); padding:3px 9px;
            letter-spacing:.06em; vertical-align:middle; text-decoration:none; cursor:pointer;
            pointer-events:auto; text-shadow:0 0 12px rgba(127,255,196,.4); }
@@ -54,7 +54,7 @@
   .tr { top: 22px; right: 24px; text-align: right; }
   .br { bottom: 22px; right: 24px; text-align: right; }
   .dot { display:inline-block; width:6px; height:6px; border-radius:50%;
-         background: var(--phos); margin-right:7px; vertical-align: middle;
+         background: var(--phos); margin-left:7px; vertical-align: middle;
          animation: blink 1.4s steps(1) infinite; }
   @keyframes blink { 0%,60%{opacity:1} 61%,100%{opacity:.15} }
   .mark { position:absolute; width:14px; height:14px; border:1px solid var(--line); }
@@ -62,7 +62,7 @@
   .m-tr { top:14px; right:14px; border-left:0; border-bottom:0; }
   .m-bl { bottom:14px; left:14px; border-right:0; border-top:0; }
   .m-br { bottom:14px; right:14px; border-left:0; border-top:0; }
-  #title { position:absolute; left:24px; top:45%; }
+  #title { position:absolute; left:24px; bottom:165px; }
   #title .lead { font-size: 13px; color: var(--phos-dim); letter-spacing:.3em; margin-bottom:10px; }
   .anno { position:absolute; font-family: var(--mono); font-size:13px; color: var(--phos);
           text-transform: uppercase; letter-spacing:.1em; white-space:nowrap;
@@ -71,7 +71,7 @@
 
   /* ---- Bottom-left program block + CTA ---- */
   #prog { position:absolute; left:24px; bottom:24px; }
-  #prog .huge { font-size: clamp(26px, 3.6vw, 46px); color: var(--phos); line-height:1.04;
+  #prog .huge { font-size: clamp(22px, 3.2vw, 40px); color: var(--phos); line-height:1.04;
                 letter-spacing:.03em; text-shadow:0 0 16px rgba(127,255,196,.35); }
 
   /* ---- Social icons (bottom-right, clickable) ---- */
@@ -155,8 +155,7 @@
   <div class="mark m-bl"></div><div class="mark m-br"></div>
 
   <div class="corner tl">
-    <div><span class="key">SYS</span> <a class="brand" href="https://klikcast.io/" target="_blank" rel="noopener">KLIKCAST</a> <span class="val">// MU-TH-UR 6000</span></div>
-    <div style="margin-top:9px;"><span class="dot"></span><span class="val">SEQUENCE ACTIVE</span></div>
+    <div><a class="brand" href="https://klikcast.io/" target="_blank" rel="noopener">KLIKCAST</a> <span class="val">// MU-TH-UR 6000</span> <span class="val" style="margin-left:18px;">SEQUENCE ACTIVE</span><span class="dot"></span></div>
   </div>
 
   <div class="corner tr">
@@ -165,9 +164,9 @@
     <div><span class="key">UPTIME</span> <span class="val" id="r-up">00:00:00</span></div>
   </div>
 
-  <div class="corner" style="top:50%; left:24px;">
+  <div class="corner" style="bottom:88px; left:24px;">
     <div><span class="key">SIGNAL</span></div>
-    <div class="val" id="r-signal" style="font-size:40px; line-height:1.05; letter-spacing:0;">░░░░░░░░░░ 00%</div>
+    <div class="val" id="r-signal" style="font-size:30px; line-height:1.05; letter-spacing:0;">░░░░░░░░░░ 00%</div>
   </div>
 
   <div class="corner br">
