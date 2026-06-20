@@ -125,8 +125,10 @@
           width:100%; text-align:center; pointer-events:none; z-index:30;
           font-family: var(--mono); color: var(--phos); text-transform:uppercase; }
   #mhud .msig-label { font-size:11px; color: var(--phos-dim); letter-spacing:.2em; }
-  #mhud .msig-bar { font-size:24px; line-height:1; letter-spacing:0; white-space:nowrap;
-                    text-shadow:0 0 12px rgba(127,255,196,.3); }
+  #mhud .msig-bar { position:relative; display:inline-block; font-size:24px; line-height:1;
+                    letter-spacing:0; white-space:nowrap; text-shadow:0 0 12px rgba(127,255,196,.3); }
+  #mhud #m-pct { position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%);
+                 font-size:14px; color: var(--phos-dim); text-shadow:none; }
   #mhud .mword { font-size:15px; letter-spacing:.18em; margin-top:4px;
                  text-shadow:0 0 10px rgba(127,255,196,.35); }
 </style>
@@ -196,7 +198,7 @@
 <!-- Mobile readout (below the ground line): meter + step word -->
 <div id="mhud">
   <div class="msig-label">SIGNAL</div>
-  <div class="msig-bar" id="m-signal">░░░░░░░░░░ 00%</div>
+  <div class="msig-bar"><span id="m-bar">░░░░░░░░░░</span><span id="m-pct">00%</span></div>
   <div class="mword" id="m-word">Idea Planted</div>
 </div>
 
@@ -652,8 +654,8 @@ const MWORDS = ['Idea Planted', 'Foundation Built', 'Influence Grown', 'Reach Ex
 function updateMobileHud(ph) {
   const grown = Math.min(1, (ph.gen + ph.growT) / (maxGen + 1));
   const SEG = 10, filled = Math.round(grown * SEG), pct = Math.round(grown * 100);
-  document.getElementById('m-signal').textContent =
-    '█'.repeat(filled) + '░'.repeat(SEG - filled) + ' ' + String(pct).padStart(2,'0') + '%';
+  document.getElementById('m-bar').textContent = '█'.repeat(filled) + '░'.repeat(SEG - filled);
+  document.getElementById('m-pct').textContent = String(pct).padStart(2,'0') + '%';
   document.getElementById('m-word').textContent = MWORDS[Math.min(tapStep, MWORDS.length - 1)];
 }
 
