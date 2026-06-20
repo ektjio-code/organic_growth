@@ -10,7 +10,6 @@
     --mono: "SF Mono", "Roboto Mono", "DejaVu Sans Mono", "Courier New", monospace;
     --phos: #7fffc4;          /* phosphor green — primary readout */
     --phos-dim: #3d6b58;      /* dimmed phosphor — labels, secondary */
-    --amber: #ffb347;         /* amber accent — the one warm tone */
     --line: rgba(127,255,196,0.22);
   }
   body {
@@ -53,7 +52,6 @@
   .brand:hover { background: rgba(127,255,196,.12); }
   .tl { top: 22px; left: 24px; }
   .tr { top: 22px; right: 24px; text-align: right; }
-  .bl { bottom: 22px; left: 24px; }
   .br { bottom: 22px; right: 24px; text-align: right; }
   .dot { display:inline-block; width:6px; height:6px; border-radius:50%;
          background: var(--phos); margin-right:7px; vertical-align: middle;
@@ -66,9 +64,6 @@
   .m-br { bottom:14px; right:14px; border-left:0; border-top:0; }
   #title { position:absolute; left:24px; top:45%; }
   #title .lead { font-size: 13px; color: var(--phos-dim); letter-spacing:.3em; margin-bottom:10px; }
-  #title h1 { font-size: clamp(28px, 5vw, 52px); font-weight: 400; line-height:1.05;
-              letter-spacing:.04em; color: var(--phos); text-shadow: 0 0 18px rgba(127,255,196,.35); }
-  #title h1 .amber { color: var(--amber); text-shadow: 0 0 18px rgba(255,179,71,.4); }
   .anno { position:absolute; font-family: var(--mono); font-size:13px; color: var(--phos);
           text-transform: uppercase; letter-spacing:.1em; white-space:nowrap;
           padding:3px 7px; border:1px solid var(--line); background: rgba(5,7,13,.55);
@@ -114,6 +109,15 @@
   }
   @keyframes crtFlicker { 0%,100%{opacity:.94} 50%{opacity:1} }
   @keyframes crtRoll { 0%{transform:translateY(-120%)} 100%{transform:translateY(360%)} }
+
+  /* Mobile: lock to portrait — show a rotate prompt when held in landscape */
+  #rotate { position:fixed; inset:0; z-index:80; display:none;
+            flex-direction:column; align-items:center; justify-content:center; gap:22px;
+            background:#05070d; color: var(--phos); font-family: var(--mono);
+            text-transform:uppercase; letter-spacing:.22em; font-size:14px; text-align:center; }
+  #rotate.show { display:flex; }
+  #rotate .ricon { font-size:58px; line-height:1; animation: rotnudge 2.4s ease-in-out infinite; }
+  @keyframes rotnudge { 0%,100%{transform:rotate(0)} 50%{transform:rotate(90deg)} }
 </style>
 </head>
 <body>
@@ -174,6 +178,9 @@
 
 <!-- CRT scanline / vignette overlay (CSS only) -->
 <div id="crt"></div>
+
+<!-- Mobile portrait lock -->
+<div id="rotate"><div class="ricon">▯</div><div>Rotate to portrait</div></div>
 
 <script>
 const cv = document.getElementById('cv');
@@ -362,58 +369,11 @@ function buildTree() {
     }
   }
 
-  // roots: downward, randomized, finer/tighter splits, tapering (pointed) tips.
-  // Pushed into the same segments/tips arrays (flagged isRoot) so they grow,
-  // cache and draw with the branches — just lit differently (blink, not steady).
-  // central=true → a taproot pulled straight down (fills the mid-lower area).
-  // depth capped at 6 so roots finish by ~tap 3 and shed the tiny dense final tips.
-  function growRoots(x, y, angle, len, width, depth, order, central) {
-    if (depth > 6 || len < 8) { tips.push({ x, y, order, depth, isRoot: true }); return; }
-    const drift = (rand() - 0.5) * 0.35;
-    let a = angle + drift;
-    if (central) {
-      a = a * 0.85 + (Math.PI / 2) * 0.15;           // taproot: trend straight down
-    } else {
-      const horiz = a < Math.PI / 2 ? 0 : Math.PI;   // others: fan outward (wide)
-      a = a * 0.8 + horiz * 0.2;
-    }
-    a = Math.max(0.12, Math.min(Math.PI - 0.12, a)); // stay just below the seed line
-    const x1 = x + Math.cos(a) * len;
-    const y1 = y + Math.sin(a) * len;
-    segments.push({ x0:x, y0:y, x1, y1, depth, width, order, gen: depth, splitX:x1, splitY:y1, isRoot:true });
-    maxOrder = Math.max(maxOrder, order);
-    maxGen = Math.max(maxGen, depth);
-    const r = rand();
-    const children = r < 0.4 ? 1 : 2;                // sparse — few splits
-    for (let i = 0; i < children; i++) {
-      const spread = 0.55 + rand() * 0.6;            // WIDE forks
-      const dir = (i - (children-1)/2) * spread + (rand()-0.5) * 0.4;
-      const childLen = len * (0.80 + rand() * 0.10); // way longer (slow taper in length)
-      const childW = width * 0.62;                   // tapers toward pointed tips
-      growRoots(x1, y1, a + dir, childLen, childW, depth + 1, order + 0.04 + rand()*0.07, central);
-    }
-  }
-
   // upward = negative Y. trunk points up (-PI/2)
   grow(baseX, baseY, -Math.PI/2, trunkLen, Math.max(W,H)*0.012, 0, 0);
 
   if (TOUCH) {
-    // Roots are MOBILE ONLY (too busy on desktop): not a mirror — a few long
-    // primaries radiate across the lower semicircle, forking sparsely into long
-    // pointed tendrils (no lights). They may run off-screen — only canopy is fitted.
-    const primaries = 5 + Math.floor(rand() * 2);   // 5–6 long primary roots
-    for (let i = 0; i < primaries; i++) {
-      const ang = 0.3 + (i / (primaries - 1)) * (Math.PI - 0.6) + (rand()-0.5) * 0.2;
-      const len = H * 0.16 * (0.85 + rand() * 0.45);
-      growRoots(baseX, baseY, ang, len, Math.max(W,H) * 0.011, 0, 0, false);
-    }
-    // central taproots: fill the empty mid-lower area straight below the seed
-    for (let i = 0; i < 2; i++) {
-      const ang = Math.PI/2 + (rand()-0.5) * 0.25;
-      const len = H * 0.18 * (0.9 + rand() * 0.3);
-      growRoots(baseX, baseY, ang, len, Math.max(W,H) * 0.011, 0, 0, true);
-    }
-    fitTreeCentered(baseX, baseY);
+    fitTreeCentered(baseX, baseY);   // mobile: centered fit (roots removed)
   } else {
     fitTree(baseX, baseY);   // scale to fit the viewport (esp. tall/narrow phones)
   }
@@ -801,6 +761,8 @@ function updateAchieved(grown) {
 let lastFrame = 0;
 function loop(ts) {
   requestAnimationFrame(loop);
+  // Mobile is portrait-locked: in landscape we pause rendering (the rotate prompt covers it).
+  if (TOUCH && window.innerWidth > window.innerHeight) return;
   // Cap to ~30fps on mobile — the wind redraws the whole canvas every frame,
   // and 30fps halves that cost while still reading as smooth sway.
   if (TOUCH && ts - lastFrame < 33) return;
@@ -813,8 +775,13 @@ function loop(ts) {
   updateUI(curP);
 }
 
-window.addEventListener('resize', () => resize(), { passive:true });
-window.addEventListener('orientationchange', () => resize(true), { passive:true });
+// Mobile portrait lock: show the rotate prompt whenever the phone is in landscape.
+function checkOrientation() {
+  const landscape = window.innerWidth > window.innerHeight;
+  document.getElementById('rotate').classList.toggle('show', TOUCH && landscape);
+}
+window.addEventListener('resize', () => { resize(); checkOrientation(); }, { passive:true });
+window.addEventListener('orientationchange', () => { resize(true); checkOrientation(); }, { passive:true });
 // Hit-test: is (mx,my) actually over a branch line (not just empty page)?
 function distToSeg(px, py, x0, y0, x1, y1) {
   const dx = x1 - x0, dy = y1 - y0, len2 = dx*dx + dy*dy;
@@ -855,6 +822,7 @@ if (TOUCH) {
 }
 
 resize(true);
+checkOrientation();
 loop();
 </script>
 </body>
