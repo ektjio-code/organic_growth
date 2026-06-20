@@ -73,17 +73,6 @@
   #prog { position:absolute; left:24px; bottom:24px; }
   #prog .huge { font-size: clamp(26px, 3.6vw, 46px); color: var(--phos); line-height:1.04;
                 letter-spacing:.03em; text-shadow:0 0 16px rgba(127,255,196,.35); }
-  #achieved { margin-top:10px; font-size:15px; color: var(--phos); min-height:1.1em; opacity:0; }
-  #achieved.on { opacity:1; }
-  #achieved.on::after { content:'▋'; margin-left:2px; animation: caret 1s steps(1) infinite; }
-  @keyframes caret { 0%,50%{opacity:1} 51%,100%{opacity:0} }
-  #cta { margin-top:12px; font-size:15px; color: var(--phos); opacity:0; transition: opacity .6s ease; }
-  #cta.show { opacity:1; }
-  .here { font-weight:700; font-size:22px; line-height:1; vertical-align:middle;
-          color: var(--phos); text-decoration:none;
-          border:1px solid var(--phos); padding:2px 9px; margin:0 4px;
-          pointer-events:auto; cursor:pointer; }
-  .here:hover { background: rgba(127,255,196,.12); }
 
   /* ---- Social icons (bottom-right, clickable) ---- */
   #social { position:absolute; right:24px; top:50%; transform:translateY(-50%);
@@ -193,8 +182,6 @@
 
   <div id="prog">
     <div class="huge">PROGRAM = ORGANiC.GROWTH</div>
-    <div id="achieved"><span id="ach-txt"></span></div>
-    <div id="cta">Click <a class="here" href="https://klikcast.io/" target="_blank" rel="noopener">HERE</a> to make an impact.</div>
   </div>
 
   <div id="social">
@@ -779,39 +766,11 @@ function updateReadout(ph) {
   const SEG = 10, filled = Math.round(grown * SEG), pct = Math.round(grown * 100);
   document.getElementById('r-signal').textContent =
     '█'.repeat(filled) + '░'.repeat(SEG - filled) + ' ' + String(pct).padStart(2,'0') + '%';
-  updateAchieved(grown);
   const sec = Math.floor((performance.now() - hudT0) / 1000);
   const hh = String(Math.floor(sec / 3600)).padStart(2,'0');
   const mm = String(Math.floor(sec / 60) % 60).padStart(2,'0');
   const ss = String(sec % 60).padStart(2,'0');
   document.getElementById('r-up').textContent = hh + ':' + mm + ':' + ss;
-}
-
-// Once growth completes, type "ORGANIC.GROWTH Achieved." then reveal the CTA.
-// Resets if you scroll back so it re-types the next time the tree fills.
-let acTyped = false, acTimer = null;
-function updateAchieved(grown) {
-  const txt = document.getElementById('ach-txt');
-  const ach = document.getElementById('achieved');
-  const cta = document.getElementById('cta');
-  if (grown >= 1 && !acTyped) {
-    acTyped = true;
-    ach.classList.add('on');
-    const full = 'ORGANIC.GROWTH Achieved.';
-    let i = 0;
-    const tick = () => {
-      txt.textContent = full.slice(0, i++);
-      if (i <= full.length) acTimer = setTimeout(tick, 55);
-      else cta.classList.add('show');
-    };
-    tick();
-  } else if (grown < 1 && acTyped) {
-    acTyped = false;
-    if (acTimer) { clearTimeout(acTimer); acTimer = null; }
-    txt.textContent = '';
-    ach.classList.remove('on');
-    cta.classList.remove('show');
-  }
 }
 
 // rAF smoothing loop
