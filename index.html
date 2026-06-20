@@ -118,6 +118,17 @@
   #rotate.show { display:flex; }
   #rotate .ricon { font-size:58px; line-height:1; animation: rotnudge 2.4s ease-in-out infinite; }
   @keyframes rotnudge { 0%,100%{transform:rotate(0)} 50%{transform:rotate(90deg)} }
+
+  /* Mobile readout under the ground line: meter + per-tap step word */
+  #mhud { position:fixed; left:50%; top:calc(50% + 18px); transform:translateX(-50%);
+          display:none; flex-direction:column; align-items:center; gap:12px;
+          width:100%; text-align:center; pointer-events:none; z-index:30;
+          font-family: var(--mono); color: var(--phos); text-transform:uppercase; }
+  #mhud .msig-label { font-size:11px; color: var(--phos-dim); letter-spacing:.2em; }
+  #mhud .msig-bar { font-size:24px; line-height:1; letter-spacing:0; white-space:nowrap;
+                    text-shadow:0 0 12px rgba(127,255,196,.3); }
+  #mhud .mword { font-size:15px; letter-spacing:.18em; margin-top:4px;
+                 text-shadow:0 0 10px rgba(127,255,196,.35); }
 </style>
 </head>
 <body>
@@ -181,6 +192,13 @@
 
 <!-- Mobile portrait lock -->
 <div id="rotate"><div class="ricon">▯</div><div>Rotate to portrait</div></div>
+
+<!-- Mobile readout (below the ground line): meter + step word -->
+<div id="mhud">
+  <div class="msig-label">SIGNAL</div>
+  <div class="msig-bar" id="m-signal">░░░░░░░░░░ 00%</div>
+  <div class="mword" id="m-word">Idea Planted</div>
+</div>
 
 <script>
 const cv = document.getElementById('cv');
@@ -625,6 +643,18 @@ function updateUI(p) {
   const done = tapStep >= TAP_STEPS;
   document.getElementById('hint').classList.toggle('off', (TOUCH ? done : p > 0.04));
   if (HUD) updateReadout(ph);
+  if (TOUCH) updateMobileHud(ph);
+}
+
+// Mobile readout below the tree: SIGNAL meter (tracks growth, exactly like desktop)
+// plus a step word that changes with each tap.
+const MWORDS = ['Idea Planted', 'Foundation Built', 'Influence Grown', 'Reach Extended', 'Organic Growth Achieved'];
+function updateMobileHud(ph) {
+  const grown = Math.min(1, (ph.gen + ph.growT) / (maxGen + 1));
+  const SEG = 10, filled = Math.round(grown * SEG), pct = Math.round(grown * 100);
+  document.getElementById('m-signal').textContent =
+    '█'.repeat(filled) + '░'.repeat(SEG - filled) + ' ' + String(pct).padStart(2,'0') + '%';
+  document.getElementById('m-word').textContent = MWORDS[Math.min(tapStep, MWORDS.length - 1)];
 }
 
 // ---- Readout HUD (desktop only for now) ----
@@ -818,7 +848,8 @@ if (!TOUCH) document.getElementById('stage').addEventListener('mousemove', (e) =
 if (TOUCH) {
   track.style.height = '100vh';              // no scroll needed; tap drives it
   document.getElementById('hint').textContent = 'Tap to grow';
-  document.getElementById('hud').style.display = 'none';   // HUD is desktop-only for now
+  document.getElementById('hud').style.display = 'none';    // desktop HUD off
+  document.getElementById('mhud').style.display = 'flex';   // mobile readout on
 }
 
 resize(true);
