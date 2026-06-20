@@ -132,6 +132,18 @@
                  font-size:14px; color: var(--phos-dim); text-shadow:none; }
   #mhud .mword { font-size:15px; letter-spacing:.18em; margin-top:4px;
                  text-shadow:0 0 10px rgba(127,255,196,.35); }
+  /* CTA below the readout — appears only once the tree is fully grown */
+  #mhud #mcta { display:flex; flex-direction:column; align-items:center; gap:18px; margin-top:24px;
+                opacity:0; transition:opacity .6s ease; }
+  #mhud #mcta.show { opacity:1; }
+  #mhud .mbrand { font-weight:700; font-size:30px; letter-spacing:.08em; color: var(--phos);
+                  border:2px solid var(--phos); padding:8px 20px; text-decoration:none;
+                  pointer-events:none; text-shadow:0 0 14px rgba(127,255,196,.4); }
+  #mhud #msocial { display:flex; gap:22px; align-items:center; }
+  #mhud #msocial a { pointer-events:none; color: var(--phos); display:inline-flex;
+                     filter: drop-shadow(0 0 6px rgba(127,255,196,.35)); }
+  #mhud #msocial svg { width:30px; height:30px; fill: currentColor; display:block; }
+  #mhud #mcta.show .mbrand, #mhud #mcta.show #msocial a { pointer-events:auto; }
 </style>
 </head>
 <body>
@@ -200,6 +212,10 @@
 <div id="mhud">
   <div class="msig-bar"><span class="msig-label">SIGNAL</span><span id="m-bar">░░░░░░░░░░</span><span id="m-pct">00%</span></div>
   <div class="mword" id="m-word">Idea Planted</div>
+  <div id="mcta">
+    <a class="mbrand">KLIKCAST</a>
+    <div id="msocial"></div>
+  </div>
 </div>
 
 <script>
@@ -657,6 +673,7 @@ function updateMobileHud(ph) {
   document.getElementById('m-bar').textContent = '█'.repeat(filled) + '░'.repeat(SEG - filled);
   document.getElementById('m-pct').textContent = String(pct).padStart(2,'0') + '%';
   document.getElementById('m-word').textContent = MWORDS[Math.min(tapStep, MWORDS.length - 1)];
+  document.getElementById('mcta').classList.toggle('show', grown >= 1);   // CTA only when fully grown
 }
 
 // ---- Readout HUD (desktop only for now) ----
@@ -852,6 +869,7 @@ if (TOUCH) {
   document.getElementById('hint').textContent = 'Tap to grow';
   document.getElementById('hud').style.display = 'none';    // desktop HUD off
   document.getElementById('mhud').style.display = 'flex';   // mobile readout on
+  document.getElementById('msocial').innerHTML = document.getElementById('social').innerHTML;  // reuse the icons
 }
 
 resize(true);
