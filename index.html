@@ -133,17 +133,22 @@
   #mhud .mword { font-size:15px; letter-spacing:.18em; margin-top:4px;
                  text-shadow:0 0 10px rgba(127,255,196,.35); }
   /* CTA below the readout — appears only once the tree is fully grown */
-  #mhud #mcta { display:flex; flex-direction:column; align-items:center; gap:18px; margin-top:24px;
-                opacity:0; transition:opacity .6s ease; }
-  #mhud #mcta.show { opacity:1; }
-  #mhud .mbrand { font-weight:700; font-size:30px; letter-spacing:.08em; color: var(--phos);
+  /* CTA — appears once fully grown. KLIKCAST centered in the bottom half; socials
+     pinned to the bottom edge, spread out toward the borders. */
+  #mcta { position:fixed; inset:0; z-index:30; display:none; pointer-events:none;
+          font-family: var(--mono); color: var(--phos); text-transform:uppercase;
+          opacity:0; transition:opacity .6s ease; }
+  #mcta.show { opacity:1; }
+  #mcta .mbrand { position:absolute; left:50%; top:74%; transform:translate(-50%,-50%);
+                  font-weight:700; font-size:30px; letter-spacing:.08em; color: var(--phos);
                   border:2px solid var(--phos); padding:8px 20px; text-decoration:none;
-                  pointer-events:none; text-shadow:0 0 14px rgba(127,255,196,.4); }
-  #mhud #msocial { display:flex; gap:22px; align-items:center; }
-  #mhud #msocial a { pointer-events:none; color: var(--phos); display:inline-flex;
+                  pointer-events:none; white-space:nowrap; text-shadow:0 0 14px rgba(127,255,196,.4); }
+  #mcta #msocial { position:absolute; left:0; right:0; bottom:26px;
+                   display:flex; justify-content:space-between; align-items:center; padding:0 22px; }
+  #mcta #msocial a { pointer-events:none; color: var(--phos); display:inline-flex;
                      filter: drop-shadow(0 0 6px rgba(127,255,196,.35)); }
-  #mhud #msocial svg { width:30px; height:30px; fill: currentColor; display:block; }
-  #mhud #mcta.show .mbrand, #mhud #mcta.show #msocial a { pointer-events:auto; }
+  #mcta #msocial svg { width:30px; height:30px; fill: currentColor; display:block; }
+  #mcta.show .mbrand, #mcta.show #msocial a { pointer-events:auto; }
 </style>
 </head>
 <body>
@@ -212,10 +217,12 @@
 <div id="mhud">
   <div class="msig-bar"><span class="msig-label">SIGNAL</span><span id="m-bar">░░░░░░░░░░</span><span id="m-pct">00%</span></div>
   <div class="mword" id="m-word">Idea Planted</div>
-  <div id="mcta">
-    <a class="mbrand">KLIKCAST</a>
-    <div id="msocial"></div>
-  </div>
+</div>
+
+<!-- Mobile CTA: appears once fully grown -->
+<div id="mcta">
+  <a class="mbrand">KLIKCAST</a>
+  <div id="msocial"></div>
 </div>
 
 <script>
@@ -869,6 +876,7 @@ if (TOUCH) {
   document.getElementById('hint').textContent = 'Tap to grow';
   document.getElementById('hud').style.display = 'none';    // desktop HUD off
   document.getElementById('mhud').style.display = 'flex';   // mobile readout on
+  document.getElementById('mcta').style.display = 'block';  // mobile CTA layer on (opacity gated by .show)
   document.getElementById('msocial').innerHTML = document.getElementById('social').innerHTML;  // reuse the icons
 }
 
