@@ -120,7 +120,7 @@
   @keyframes rotnudge { 0%,100%{transform:rotate(0)} 50%{transform:rotate(90deg)} }
 
   /* Mobile readout under the ground line: meter + per-tap step word */
-  #mhud { position:fixed; left:50%; top:calc(50% + 18px); transform:translateX(-50%);
+  #mhud { position:fixed; left:50%; top:calc(50% + 42px); transform:translateX(-50%);
           display:none; flex-direction:column; align-items:center; gap:12px;
           width:100%; text-align:center; pointer-events:none; z-index:30;
           font-family: var(--mono); color: var(--phos); text-transform:uppercase; }
@@ -139,7 +139,7 @@
           font-family: var(--mono); color: var(--phos); text-transform:uppercase;
           opacity:0; transition:opacity .6s ease; }
   #mcta.show { opacity:1; }
-  #mcta .mbrand { position:absolute; left:50%; top:74%; transform:translate(-50%,-50%);
+  #mcta .mbrand { position:absolute; left:50%; top:calc(74% + 24px); transform:translate(-50%,-50%);
                   font-weight:700; font-size:30px; letter-spacing:.08em; color: var(--phos);
                   border:2px solid var(--phos); padding:8px 20px; text-decoration:none;
                   pointer-events:none; white-space:nowrap; text-shadow:0 0 14px rgba(127,255,196,.4); }
