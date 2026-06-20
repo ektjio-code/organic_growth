@@ -80,6 +80,7 @@
   #cta { margin-top:12px; font-size:15px; color: var(--phos); opacity:0; transition: opacity .6s ease; }
   #cta.show { opacity:1; }
   .here { font-weight:700; font-size:22px; line-height:1; vertical-align:middle;
+          color: var(--phos); text-decoration:none;
           border:1px solid var(--phos); padding:2px 9px; margin:0 4px;
           pointer-events:auto; cursor:pointer; }
   .here:hover { background: rgba(127,255,196,.12); }
@@ -165,7 +166,7 @@
   <div class="mark m-bl"></div><div class="mark m-br"></div>
 
   <div class="corner tl">
-    <div><span class="key">SYS</span> <a class="brand">KLIKCAST</a> <span class="val">// MU-TH-UR 6000</span></div>
+    <div><span class="key">SYS</span> <a class="brand" href="https://klikcast.io/" target="_blank" rel="noopener">KLIKCAST</a> <span class="val">// MU-TH-UR 6000</span></div>
     <div style="margin-top:9px;"><span class="dot"></span><span class="val">SEQUENCE ACTIVE</span></div>
   </div>
 
@@ -193,7 +194,7 @@
   <div id="prog">
     <div class="huge">PROGRAM = ORGANiC.GROWTH</div>
     <div id="achieved"><span id="ach-txt"></span></div>
-    <div id="cta">Click <span class="here">HERE</span> to make an impact.</div>
+    <div id="cta">Click <a class="here" href="https://klikcast.io/" target="_blank" rel="noopener">HERE</a> to make an impact.</div>
   </div>
 
   <div id="social">
@@ -221,7 +222,7 @@
 
 <!-- Mobile CTA: appears once fully grown -->
 <div id="mcta">
-  <a class="mbrand">KLIKCAST</a>
+  <a class="mbrand" href="https://klikcast.io/" target="_blank" rel="noopener">KLIKCAST</a>
   <div id="msocial"></div>
 </div>
 
@@ -864,7 +865,7 @@ document.addEventListener('click', (e) => {
   if (TOUCH) advanceGrowth();
 });
 function impact() {
-  // Hook for the call-to-action. Destination/action to be wired in later.
+  window.open('https://klikcast.io/', '_blank', 'noopener');
 }
 // Desktop: show the pointer cursor only while actually hovering the tree.
 if (!TOUCH) document.getElementById('stage').addEventListener('mousemove', (e) => {
